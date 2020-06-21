@@ -63,6 +63,8 @@ export class Viewbox {
 		const matrix = this.matrix;
 		matrix.e += - dx * matrix.a;
 		matrix.f += - dy * matrix.d;
+		this._left += dx;
+		this._top += dy;
 		this.context.translate(-dx, -dy);
 	}
 

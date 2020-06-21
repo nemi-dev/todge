@@ -1,3 +1,15 @@
+declare interface CoordinateState {
+	readonly x : number
+	readonly y : number
+	readonly beforeX : number
+	readonly beforeY : number
+	readonly moveX : number
+	readonly moveY : number
+	input(x : number, y : number) : void
+	shim(x : number, y : number) : void
+	pulse() : void
+}
+
 declare interface CoordMessage {
 	type : "mousedown" | "mouseup" | "touchstart" | "touchend"
 
@@ -15,13 +27,18 @@ declare interface CoordMessage {
 declare interface Listener {
 	push(m : CoordMessage) : void
 	dispatchAll() : void
+	dispatchDrag(m : CoordinateState) : void
 }
 
-declare interface Point {
+declare interface Physical {
 	x : number
 	y : number
 	velX : number
 	velY : number
-	color : string
-	opacity : number
 }
+
+declare interface DesiredPhysical extends Physical {
+	destX : number
+	destY : number
+}
+

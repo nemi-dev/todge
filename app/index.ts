@@ -1,53 +1,83 @@
 import { View } from './View';
 import { MouseInput } from './Input';
-import { Model } from './Model';
+import Game from './Game';
+import RAFPulseClock from './RAFPulseClock';
 
-const canvas = document.getElementsByTagName('canvas')[0];
-canvas.getContext('2d').setTransform(1, 0, 0, 1, 60, 80);
+const gameCanvas = document.getElementById('game-canvas') as HTMLCanvasElement;
+gameCanvas.getContext('2d').setTransform(1, 0, 0, 1, 120, 160);
 
-export const view = new View(canvas);
+gameCanvas.addEventListener('contextmenu', ev => {
+	ev.preventDefault();
+	return false;
+});
+
+const statusCanvas = document.getElementById('timer-canvas') as HTMLCanvasElement;
+const statusContext = statusCanvas.getContext('2d');
+statusContext.textBaseline = 'middle';
+statusContext.fillStyle = '#FFFFFF';
+
+const view = new View(gameCanvas);
 view.setViewSize(360);
 
-const model = new Model();
-model.mat = view.viewbox.matrix;
+const game = new Game(view.viewbox);
 
 const input = new MouseInput();
-input.connect(view.canvas, model);
+input.connect(view.canvas, game);
 
 
-// function handleResize() {
-// 	let w : number, h : number;
-// 	if (window.innerWidth / window.innerHeight > 3 / 4) {
-// 		h = window.innerHeight - 64;
-// 		w = h * 3 / 4;
-// 	} else {
-// 		w = window.innerWidth - 64;
-// 		h = w * 4 / 3;
-// 	}
-// 	view.setViewSize(w);
-// }
-
-// window.addEventListener('resize', handleResize);
-// window.addEventListener('load', handleResize);
-
-
-
-
-
-
-
-
-
-
-
-function rAF(t? : number) {
-	input.update();
-	model.update(input.coordinate);
-	view.viewbox.clearRect();
-	model.render(view.context);
-	requestAnimationFrame(rAF);
+function fitSize() {
+	let w : number, h : number;
+	let viewRatio = view.width / view.height;
+	if (window.innerWidth / window.innerHeight > viewRatio) {
+		h = window.innerHeight * 0.8;
+		w = h * viewRatio;
+	} else {
+		w = window.innerWidth * 0.8;
+		h = w / viewRatio;
+	}
+	view.setViewSize(w);
 }
 
-rAF();
+window.addEventListener('resize', fitSize);
+window.addEventListener('load', fitSize);
 
-(window as (Window & typeof globalThis & { view : View })).view = view;
+const gridStep = 20;
+
+function renderGrid(view : View) {
+	let { viewbox, context } = view;
+	const { left, right, top, bottom, x: viewboxX, y : viewboxY } = viewbox;
+	const startX = (Math.round(left / gridStep) - 1) * gridStep;
+	const startY = (Math.round(top / gridStep) - 1) * gridStep;
+	const endX = (Math.round(right / gridStep) + 1) * gridStep;
+	const endY = (Math.round(bottom / gridStep) + 1) * gridStep;
+	context.fillStyle = '#80808040';
+	for (let x = startX; x < endX; x += gridStep) {
+		for (let y = startY; y < endY; y += gridStep) {
+			context.fillRect(x - 1, y - 1, 2, 2);
+		}
+	}
+	
+	context.fillStyle = '#80808020';
+	for (let x = startX; x < endX; x += gridStep) {
+		for (let y = startY; y < endY; y += gridStep) {
+			let x_ = x + (x - viewboxX) / 10;
+			let y_ = y + (y - viewboxY) / 10;
+			context.fillRect(x_ - 2, y_ - 2, 4, 4);
+		}
+	}
+
+}
+
+const clock = new RAFPulseClock(t => {
+	input.update();
+	game.hitTest();
+	game.update(t);
+
+	view.viewbox.clearRect();
+	renderGrid(view);
+	game.render(view.context);
+
+});
+
+clock.start();
+

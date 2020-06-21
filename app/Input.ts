@@ -23,13 +23,6 @@
  * */
 export class CoordinateState {
 
-	/*
-	 * DOM 이벤트가 발생했을 때 임시적으로 캡쳐한 위치  
-	 * 이것은 이동, 누름, 놓음 모든 종류의 이벤트를 받아들인다
-	 * Listener가 마우스 좌표를 받아들이면 퍼즐 조각에 바로 반영하지 않고, requestAnimationFrame이 돌아올 때까지 기다린다. (이벤트 핸들링이 rAF보다 훨씬 많이 발생한다.)  
-	 * 따라서 쏟아지는 이벤트로 인해 불필요하게 성능이 저하되는 것을 방지한다.  
-	 * 어떤 이벤트 루프에서 rAF가 발생하지 않으면 해당 루프로 받아들인 좌표는 버려지게 된다.
-	 * */
 
 	/** 임시적으로 캡쳐한 입력 X좌표 */
 	private inputX : number
@@ -139,7 +132,8 @@ export class MouseInput {
 	/** 입력을 받아들이는 어떤 모델 */
 	private listener : Listener
 
-	/** 중요 이벤트(마우스 누름, 마우스 놓음)를 저장한 큐 */
+	/** (rAF?) 지금 누르고 있는 버튼 */
+	private buttons = 0;
 
 	/**
 	 * 마우스 누름 발생 시, 언젠가 발생할 마우스 떼기에 대응하여 임시로 메시지를 만들어 저장해 둘 배열
@@ -148,9 +142,6 @@ export class MouseInput {
 	 * */
 	private readonly messageCache : CoordMessage[] = [];
 
-	/** 어떤 컨트롤(특히 뷰 기반 컨트롤)에 "배율이 설정"되었고, 리스너에게 모델 좌표계 기반으로 메시지를 보내고 싶을 때 모든 이벤트에 이 값이 곱해진다. */
-	private scale : number
-
 	/** rAF 발생 당시 마우스 누름 중일 때 사용할 수 있는 좌표 컴포넌트 */
 	public readonly coordinate = new CoordinateState();
 
@@ -158,8 +149,9 @@ export class MouseInput {
 	public readonly onstart = (ev : MouseEvent) => {
 		ev.preventDefault();
 
-		let startX = ev.offsetX * this.scale;
-		let startY = ev.offsetY * this.scale;
+		this.buttons = ev.buttons;
+		let startX = ev.offsetX;
+		let startY = ev.offsetY;
 		let id = ev.button;
 		let startTime = ev.timeStamp;
 
@@ -179,39 +171,42 @@ export class MouseInput {
 		return false;
 	}
 
+	/** 마우스 누름 여부와 상관없이 마우스를 움직일 때 실행된다. */
 	public readonly onmove = (ev : MouseEvent) => {
-		this.coordinate.input(ev.offsetX * this.scale, ev.offsetY * this.scale);
+		this.coordinate.input(ev.offsetX, ev.offsetY);
 	}
 
 	public readonly onend = (ev : MouseEvent) => {
+		this.buttons = ev.buttons;
 		/* MouseEvent.offsetX는 source 상대 위치이다. 띠용! */
-		let x = ev.offsetX * this.scale;
-		let y = ev.offsetY * this.scale;
+		let x = ev.offsetX;
+		let y = ev.offsetY;
 
 		// 마우스 누름 당시 저장했던 마우스 놓기 메시지를 가져온다.
 		let message = this.messageCache[ev.button];
 		delete this.messageCache[ev.button];
+		if (message) {
+			// 임시 메시지에 실제 마우스 놓기 데이터를 입력하여 메시지를 완성시킨다.
+			message.endX = x;
+			message.endY = y;
+			message.endTime = ev.timeStamp;
 
-		// 임시 메시지에 실제 마우스 놓기 데이터를 입력하여 메시지를 완성시킨다.
-		message.endX = x;
-		message.endY = y;
-		message.endTime = ev.timeStamp;
+			// 메시지를 큐에 입력한다.
+			this.listener.push(message);
+			
+			// 현재 rAF의 마우스 위치를 떼기 위치로 간주한다.
+			// input에다 좌표를 넣어두면 rAF 발생 시 current로 내려가겠지?
+			this.coordinate.input(x, y);
+		}
 
-		// 메시지를 큐에 입력한다.
-		this.listener.push(message);
-		
-		// 현재 rAF의 마우스 위치를 떼기 위치로 간주한다.
-		// input에다 좌표를 넣어두면 rAF 발생 시 current로 내려가겠지?
-		this.coordinate.input(x, y);
 
 	}
 
 	/** 입력 컴포넌트를 뷰에 연결한다. */
-	connect (source : HTMLElement, listener : Listener, scale = 1) {
+	connect (source : HTMLElement, listener : Listener) {
 		this.disconnect();
 		this.source = source;
 		this.listener = listener;
-		this.scale = scale;
 		this.source.addEventListener('mousedown', this.onstart);
 		this.source.addEventListener('mousemove', this.onmove);
 		document.addEventListener('mouseup', this.onend);
@@ -237,6 +232,7 @@ export class MouseInput {
 	update() {
 		this.listener.dispatchAll();
 		this.coordinate.pulse();
+		if (this.buttons) this.listener.dispatchDrag(this.coordinate);
 	}
 
 }
@@ -272,6 +268,7 @@ export class TouchInput {
 	
 	public readonly onstart = (ev : TouchEvent) => {
 		// 이게 없을 때 캔버스를 스와이프하면 페이지가 스크롤되고 탭을 하면 일부 환경에서 mouseup,mousedown을 일으킨다.
+		// 타겟이 도큐먼트가 아니라면 스크롤되어선 안되겠지?
 		ev.preventDefault();
 
 		const startTime = ev.timeStamp;
@@ -312,35 +309,38 @@ export class TouchInput {
 	public readonly onend = (ev : TouchEvent) => {
 		for (const touch of ev.changedTouches) {
 			if (touch.identifier in this.touchStateMap)	{
-				const state = this.touchStateMap[touch.identifier];
-
-				const x = (touch.pageX - this.sourceLeft) * this.scale;
-				const y = (touch.pageY - this.sourceTop) * this.scale;
-
 				const message = this.messageCache[touch.identifier];
 				delete this.messageCache[touch.identifier];
+				if (message) {
 
-				message.endX = x;
-				message.endY = y;
-				message.endTime = ev.timeStamp;
+					const state = this.touchStateMap[touch.identifier];
 
-				this.listener.push(message);
+					const x = (touch.pageX - this.sourceLeft) * this.scale;
+					const y = (touch.pageY - this.sourceTop) * this.scale;
 
-				state.input(x, y);
 
-				// 놓은 위치의 터치 위치 상태를 뺀다.
-				delete this.touchStateMap[touch.identifier];
-				// 메이저 터치가 빠졌으면 후계자를 찾는다.
-				if (this.coord == state) {
-					this.coord = null;
-					for (const i in this.touchStateMap) {
-						if (this.touchStateMap.hasOwnProperty(i)) {
-							this.coord = this.touchStateMap[i];
-							break;
+					message.endX = x;
+					message.endY = y;
+					message.endTime = ev.timeStamp;
+
+					this.listener.push(message);
+
+					state.input(x, y);
+
+					// 놓은 위치의 터치 위치 상태를 뺀다.
+					delete this.touchStateMap[touch.identifier];
+					// 메이저 터치가 빠졌으면 후계자를 찾는다.
+					if (this.coord == state) {
+						this.coord = null;
+						for (const i in this.touchStateMap) {
+							if (this.touchStateMap.hasOwnProperty(i)) {
+								this.coord = this.touchStateMap[i];
+								break;
+							}
 						}
 					}
 				}
-				
+					
 			}
 		}
 	}
