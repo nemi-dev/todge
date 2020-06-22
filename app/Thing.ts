@@ -37,9 +37,7 @@ export default class Thing {
 		context.stroke();
 	}
 
-	get valid() {
-		return this.life > 0;
-	}
+	get valid() { return this.life > 0; }
 
 	static hit(a : Thing, b : Thing, torusWidth? : number, torusHeight? : number) {
 		let { x : ax, y : ay, r : ar } = a;

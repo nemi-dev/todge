@@ -96,7 +96,7 @@ export default class Timer {
 		
 		context.font = this.fontSize + 'px "Exo 2"';
 		context.textBaseline = "middle";
-		context.fillStyle = "#69d7ff40";
+		context.fillStyle = "hsla(200, 100%, 70%, 0.25)";
 		context.textAlign = 'center';
 		
 		let [min, sec, cs] = formatMs(this.currentTime - this.startTime);

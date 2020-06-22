@@ -22,32 +22,70 @@ const followDistance = 30;
 const timerWidth = 56;
 const timerHeight = 12;
 
-const textMaxLife = 30;
 const damage = 20;
+
+const viewboxReplicaOriginal = { x : 0, y : 0, velX : 0, velY : 0, destX : 0, destY : 0 };
+
 
 class GuideText {
 
-	text : string
-	x : number
-	y : number
-	size : number
-	fontWeight : "normal" | "bold"
+	private text : string
+	private x : number
+	private y : number
+	private font : string
 
 	constructor(text : string, x : number, y : number, size : number, weight : "normal" | "bold") {
 		this.x = x;
 		this.y = y;
 		this.text = text;
-		this.size = size;
-		this.fontWeight = weight
+		this.font = `${weight} ${size}px "Exo 2", "Noto Sans KR"`;
 	}
+
 	render(context : CanvasRenderingContext2D, a : number) {
 		let { x, y, text } = this;
-		context.fillStyle = `hsla(196, 100%, 71%, ${a})`;
+		context.fillStyle = `hsla(200, 100%, 70%, ${a})`;
 		context.textAlign = "center";
 		context.textBaseline = "middle";
-		context.font = `${this.fontWeight} ${this.size}px "Exo 2", "Noto Sans KR"`;
+		context.font = this.font;
 		
 		context.fillText(text, x, y);
+	}
+}
+
+const guideMaxLife = 30;
+const guideTextDistance = 50;
+
+class GuideTextGroup {
+	readonly texts = [
+		new GuideText("땃~쥐!", 0, - guideTextDistance, 20, "bold"),
+		new GuideText("Todge", 0, - guideTextDistance + 15, 12, "bold"),
+		new GuideText("참치캔 게이지", - guideTextDistance, -12, 10, "bold"),
+		new GuideText("시간마다 조금씩 감소", - guideTextDistance, 0, 7, "normal"),
+		new GuideText("참치캔을 먹어서 회복", - guideTextDistance, 8, 7, "normal"),
+		new GuideText("체력 게이지", guideTextDistance, -12, 10, "bold"),
+		new GuideText("피격 시 감소", guideTextDistance, 0, 7, "normal"),
+		new GuideText("길게 눌러 이동", 0, guideTextDistance, 10, "bold"),
+		new GuideText("가까운 지점을 누르면 느리게 이동", 0, guideTextDistance + 10, 7, "normal"),
+	];
+	guideLife : number
+
+	constructor() {
+		this.init(0);
+	}
+
+	init(t : DOMHighResTimeStamp) {
+		this.guideLife = guideMaxLife;
+	}
+
+	get valid() { return this.guideLife > 0 }
+
+	update(t : DOMHighResTimeStamp) {
+		this.guideLife--;
+	}
+
+	render(context : CanvasRenderingContext2D) {
+		const a = this.guideLife / guideMaxLife;
+		for (const text of this.texts) text.render(context, a);
 	}
 }
 
@@ -57,12 +95,17 @@ export default class Game {
 
 	messages: CoordMessage[] = [];
 
+	/** 너 임마, 너. */
 	you : You
+
+	/** 적들을 담은 배열 */
 	enemies : Thing[];
+
+	/** 참치캔을 담은 배열 */
 	tunas : Thing[];
 
-	readonly guideTexts : GuideText[]
-	guideLife : number
+	/** 가이드 텍스트 */
+	readonly guide : GuideTextGroup = new GuideTextGroup();
 
 	readonly viewbox : Viewbox
 
@@ -83,7 +126,6 @@ export default class Game {
 	 * */
 	enemySpawnCounter : number
 
-	currentEnemiesNumber : number
 	totalEnemiesNumber : number
 
 
@@ -91,45 +133,18 @@ export default class Game {
 
 	status : "free" | "start" | "dead" 
 
-	
-	updateFunctions : ((t : DOMHighResTimeStamp) => void)[];
-
-	removeUpdateFunctionLater : ((t : DOMHighResTimeStamp) => void)[] = [];
-	updateFunctionLater : ((t : DOMHighResTimeStamp) => void)[] = [];
-
 	constructor(viewbox : Viewbox) {
 		let you = new You();
-		let viewboxReplica = {
-			x : 0,
-			y : 0,
-			velX : 0,
-			velY : 0,
-			destX : 0,
-			destY : 0
-		};
 
 		this.you = you;
 		this.viewbox = viewbox;
 		this.mat = viewbox.matrix;
-
-		this.guideTexts = [
-			new GuideText("땃~쥐!", 0, - followDistance * 2, 20, "bold"),
-			new GuideText("Todge", 0, - followDistance * 2 + 15, 12, "bold"),
-			new GuideText("참치캔 게이지", - followDistance * 2.5, -12, 10, "bold"),
-			new GuideText("시간마다 조금씩 감소", - followDistance * 2.5, 0, 7, "normal"),
-			new GuideText("참치캔을 먹어서 회복", - followDistance * 2.5, 8, 7, "normal"),
-			new GuideText("체력 게이지", followDistance * 2.5, 0, 10, "bold"),
-			new GuideText("길게 눌러 이동", 0, followDistance * 2, 10, "bold"),
-			new GuideText("가까운 지점을 누르면 느리게 이동", 0, followDistance * 2 + 10, 7, "normal"),
-		];
-
 		
+		let viewboxReplica = Object.assign({}, viewboxReplicaOriginal);
 		this.viewboxReplica = viewboxReplica;
-		
 		this.moveViewboxToTarget = moveToTarget.bind(viewboxReplica, you.speed, you.acc, you.closeDistance);
 		this.viewboxFriction = friction.bind(viewboxReplica);
 
-		
 		this.timer = new Timer(timerWidth, timerHeight);
 		this.init(0);
 	}
@@ -141,43 +156,35 @@ export default class Game {
 		this.you.init();
 		this.enemies = [];
 		this.tunas = [];
-		this.updateFunctions = [this._update_you, this._you_are_invincible];
+		this.guide.init(t);
+		
 		this.viewbox.setPosition(0, 0);
-		const viewboxReplica = this.viewboxReplica;
-		viewboxReplica.x = 0;
-		viewboxReplica.y = 0;
-		viewboxReplica.velX = 0;
-		viewboxReplica.velY = 0;
-		viewboxReplica.destX = 0;
-		viewboxReplica.destY = 0;
-		this.guideLife = textMaxLife;
+		Object.assign(this.viewboxReplica, viewboxReplicaOriginal);
+		
 		this.onstart = this._onStartInitial;
 		this.enemySpawnCounter = 0;
 		this.totalEnemiesNumber = 0;
-		this.currentEnemiesNumber = 0;
 		this.tunaSpawnCounter = 0;
 		this.timer.startTime = t;
 		this.timer.currentTime = t;
+		this.update = this.updateInit;
 	}
 
 	/** 게임 시작을 알리는 메서드 */
 	start(t : DOMHighResTimeStamp) {
 		this.status = "start";
-		// 무적을 뺀다.
-		this.updateFunctions.pop();
-		this.updateFunctions.push(this._update_guide, this._update_things, this._update_timer);
 		this.timer.start(t);
 		this.onstart = this._onstart;
+		this.update = this.updatePlay;
 	}
 
 	/** 게임 오버를 알리는 메서드 */
 	gameover(t? : DOMHighResTimeStamp) {
 		this.status = "dead";
 		this.timer.end(t);
-		this.updateFunctions = [];
 		this.onstart = this._onstartDead;
+		this.update = this.updateGameover;
 	}
-
 
 	push(m: CoordMessage) {
 		this.messages.unshift(m);
@@ -197,10 +204,12 @@ export default class Game {
 		}
 	}
 
+	/**
+	 * 랜덤으로 오브젝트를 생성한다.
+	 */
 	createThingRandom() {
 		const chance = Math.pow(this.enemySpawnCounter / (maxSpawnDelay + 1), 2);
 		const { x: yourX, y : yourY, sight } = this.you;
-		const { enemies, tunas } = this;
 		if (Math.random() < chance) {
 			const count = Math.floor(Math.random()*varSpawnCount) + minSpawnCount;
 			for (let i = 0 ; i < count; i++) {
@@ -212,10 +221,10 @@ export default class Game {
 				const thing = new Thing("enemy", x, y, enemySize, "#FF0000", 600);
 				thing.velX = - enemySpeed * Math.cos(angle + diverge);
 				thing.velY = - enemySpeed * Math.sin(angle + diverge);
-				enemies.push(thing);
+
+				this.enemies.push(thing);
 				this.enemySpawnCounter = 0;
 				this.totalEnemiesNumber++;
-				this.currentEnemiesNumber++;
 			}
 		}
 		this.enemySpawnCounter++;
@@ -227,7 +236,8 @@ export default class Game {
 			let x = yourX + Math.cos(angle) * distance;
 			let y = yourY + Math.sin(angle) * distance;
 			const thing = new Thing("tuna", x, y, tunaSize, "#FFB300", 1800);
-			tunas.push(thing);
+			
+			this.tunas.push(thing);
 			this.tunaSpawnCounter = 0;
 			
 		} else {
@@ -259,8 +269,7 @@ export default class Game {
 	}
 
 	dispatchDrag(c : CoordinateState) {
-		let [x, y] = this.mat.itransformPoint(c.x, c.y);
-		this.you.setDestination(x, y);
+		this.you.setDestination(...this.mat.itransformPoint(c.x, c.y));
 	}
 
 	moveViewboxToYou() {
@@ -280,36 +289,17 @@ export default class Game {
 		this.viewbox.move(replica.velX, replica.velY);
 	}
 
-	private _update_you(t : DOMHighResTimeStamp) {
-		this.you.update(this);
-		this.moveViewboxToYou();
-		if (!this.you.valid) {
-			this.gameover(t);
-		}
-	}
-
-	private _you_are_invincible(t : DOMHighResTimeStamp) {
-		this.you.life++;
-	}
-
-	private _update_guide(t : DOMHighResTimeStamp) {
-		this.guideLife--;
-		if (this.guideLife < 0) this.removeUpdateFunctionLater.push(this._update_guide);
-	}
-
 	private _update_things(t : DOMHighResTimeStamp) {
 		const limit = this.you.sight * 3;
 		for (let i = this.enemies.length - 1; i >=0 ; i--) {
 			const enemy = this.enemies[i];
 			if (!enemy.valid) {
 				this.enemies.splice(i, 1);
-				this.currentEnemiesNumber--;
 			} else {
 				const distX = enemy.x - this.you.x;
 				const distY = enemy.y - this.you.y;
 				if ((Math.abs(distX) > limit || Math.abs(distY) > limit) && Math.hypot(distX, distY)) {
 					this.enemies.splice(i, 1);
-					this.currentEnemiesNumber--;
 				}
 			}
 		}
@@ -318,31 +308,33 @@ export default class Game {
 				this.tunas.splice(i, 1);
 			}
 		}
-		for (const enemy of this.enemies) {
-			enemy.update(this);
-		}
-		for (const tuna of this.tunas) {
-			tuna.update(this);
-		}
+		for (const enemy of this.enemies) enemy.update(this);
+		for (const tuna of this.tunas) tuna.update(this);
+		
 		this.createThingRandom();
 	}
 
-	private _update_timer(t :DOMHighResTimeStamp) {
+	private updateInit(t : DOMHighResTimeStamp) {
+		this.you.update(this);
+		this.you.life = this.you.maxLife;
+	}
+
+	private updatePlay(t : DOMHighResTimeStamp) {
 		this.timer.update(t);
+		this.you.update(this);
+		this.moveViewboxToYou();
+		if (!this.you.valid) {
+			this.gameover(t);
+		}
+		if (this.guide.valid) this.guide.update(t);
+		this._update_things(t);
 	}
 
+	private updateGameover(t : DOMHighResTimeStamp) {
 
-	update(t : DOMHighResTimeStamp) {
-		for (const updateFunction of this.updateFunctions) {
-			updateFunction.call(this, t);
-		}
-		let toRemove : (t : DOMHighResTimeStamp) => void
-		while (toRemove = this.removeUpdateFunctionLater.pop()) {
-			this.updateFunctions.splice(this.updateFunctions.indexOf(toRemove), 1);
-		}
-		
 	}
 
+	update : (t : DOMHighResTimeStamp) => void;
 	hitTest() {
 		const you = this.you;
 		for (const enemy of this.enemies) {
@@ -363,11 +355,9 @@ export default class Game {
 	renderCount(context : CanvasRenderingContext2D) {
 		context.font = '16px "Exo 2"';
 		context.textBaseline = "middle";
-		context.fillStyle = "#69d7ff40";
+		context.fillStyle = "hsla(200, 100%, 70%, 0.25)";
 		context.textAlign = 'center';
-
 		context.fillText(this.totalEnemiesNumber.toString(), this.viewbox.x , this.viewbox.y - this.viewbox.height / 4);
-
 	}
 
 	renderTunaDirection(context : CanvasRenderingContext2D) {
@@ -392,23 +382,17 @@ export default class Game {
 	}
 
 	render(context: CanvasRenderingContext2D) {
-		if (this.guideLife >= 0) for (const guide of this.guideTexts) {
-			guide.render(context, this.guideLife / textMaxLife);
-		}
+		if (this.guide.valid) this.guide.render(context);
 		for (const enemies of this.enemies) enemies.render(context);
-		
 		for (const tuna of this.tunas) tuna.render(context);
 		
 		this.you.render(context);
-		
-		this.you.renderSight(context);
 
+		this.you.renderSight(context);
 
 		this.you.renderYourUI(context, this.viewboxReplica.x, this.viewboxReplica.y, followDistance * 2);
 		this.renderTunaDirection(context);
-
 		this.timer.render(context ,this.viewbox.x, this.viewbox.y + this.viewbox.height / 4);
 		this.renderCount(context);
-
 	}
 }
