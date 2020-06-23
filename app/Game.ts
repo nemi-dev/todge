@@ -121,15 +121,26 @@ export default class Game {
 	torusHeight : number = 280
 
 	/**
-	 * - 매 프레임마다 증가한다.
-	 * - 값이 증가할수록 적이 출현할 확률이 높아진다.
+	 * 매 프레임마다 증가하는 철충 카운터
 	 * */
 	enemySpawnCounter : number
 
+	/**
+	 * 누적 스폰된 철충 수를 나타낸다.
+	 */
 	totalEnemiesNumber : number
 
 
+	/**
+	 * 매 프레임마다 증가하는 참치캔 카운터
+	 */
 	tunaSpawnCounter : number
+
+	/**
+	 * 참치캔 카운터가 최대가 되었을 때 참치를 스폰할 확률
+	 * [1..5] 범위 내의 자연수로 1당 20%와 같다.
+	 */
+	tunaChance : number
 
 	status : "free" | "start" | "dead" 
 
@@ -161,29 +172,33 @@ export default class Game {
 		this.viewbox.setPosition(0, 0);
 		Object.assign(this.viewboxReplica, viewboxReplicaOriginal);
 		
-		this.onstart = this._onStartInitial;
 		this.enemySpawnCounter = 0;
 		this.totalEnemiesNumber = 0;
 		this.tunaSpawnCounter = 0;
 		this.timer.startTime = t;
 		this.timer.currentTime = t;
+		this.onstart = this._onstartInitial;
 		this.update = this.updateInit;
+		this.dispatchDrag = this.noop;
 	}
 
 	/** 게임 시작을 알리는 메서드 */
 	start(t : DOMHighResTimeStamp) {
 		this.status = "start";
 		this.timer.start(t);
-		this.onstart = this._onstart;
+		this.onstart = this._onstartPlaying;
 		this.update = this.updatePlay;
+		this.dispatchDrag = this._dispatchCoordUpdate;
 	}
 
 	/** 게임 오버를 알리는 메서드 */
 	gameover(t? : DOMHighResTimeStamp) {
 		this.status = "dead";
 		this.timer.end(t);
+		this.you.neutralizeDestination();
 		this.onstart = this._onstartDead;
 		this.update = this.updateGameover;
+		this.dispatchDrag = this.noop;
 	}
 
 	push(m: CoordMessage) {
@@ -235,7 +250,7 @@ export default class Game {
 			let distance = sight * (0.5 + Math.random());
 			let x = yourX + Math.cos(angle) * distance;
 			let y = yourY + Math.sin(angle) * distance;
-			const thing = new Thing("tuna", x, y, tunaSize, "#FFB300", 1800);
+			const thing = new Thing("tuna", x, y, tunaSize, "#FFBF00", 1800);
 			
 			this.tunas.push(thing);
 			this.tunaSpawnCounter = 0;
@@ -246,13 +261,13 @@ export default class Game {
 	}
 
 	/** 아직 게임이 시작되지 않았을 때 마우스 누름/터치 시작 핸들러 */
-	private _onStartInitial(m : CoordMessage) {
+	private _onstartInitial(m : CoordMessage) {
 		this.you.setDestination(...this.mat.itransformPoint(m.startX, m.startY));
 		this.start(m.startTime);
 	}
 
 	/** 게임 플레이 중 누름 핸들러 */
-	private _onstart(m : CoordMessage) {
+	private _onstartPlaying(m : CoordMessage) {
 		this.you.setDestination(...this.mat.itransformPoint(m.startX, m.startY));
 	}
 
@@ -261,17 +276,24 @@ export default class Game {
 		this.init(m.startTime);
 	}
 
-	onstart = this._onStartInitial
+	onstart = this._onstartInitial
 
-
+	/** 마우스를 놓을 때 */
 	onend(m : CoordMessage) {
 		this.you.neutralizeDestination();
 	}
 
-	dispatchDrag(c : CoordinateState) {
+	/** 아무 것도 하지 않는다. */
+	private noop(...a : any) {} 
+
+	/** 게임 플레이 중 입력좌표 업데이트를 받을 때 실행한다. */
+	private _dispatchCoordUpdate(c : CoordinateState) {
 		this.you.setDestination(...this.mat.itransformPoint(c.x, c.y));
 	}
 
+	dispatchDrag: (c : CoordinateState) => void = this.noop;
+
+	/** 뷰박스를 플레이어에게로 옮긴다. */
 	moveViewboxToYou() {
 		const replica = this.viewboxReplica;
 		let viewDistX = this.you.x - this.viewbox.x;
@@ -289,18 +311,13 @@ export default class Game {
 		this.viewbox.move(replica.velX, replica.velY);
 	}
 
+	/** 객체들을 업데이트한다. 여기에는 삭제도 포함된다. */
 	private _update_things(t : DOMHighResTimeStamp) {
 		const limit = this.you.sight * 3;
 		for (let i = this.enemies.length - 1; i >=0 ; i--) {
 			const enemy = this.enemies[i];
-			if (!enemy.valid) {
+			if (!enemy.valid || (Math.abs(enemy.x - this.you.x) > limit || Math.abs(enemy.y - this.you.y) > limit)) {
 				this.enemies.splice(i, 1);
-			} else {
-				const distX = enemy.x - this.you.x;
-				const distY = enemy.y - this.you.y;
-				if ((Math.abs(distX) > limit || Math.abs(distY) > limit) && Math.hypot(distX, distY)) {
-					this.enemies.splice(i, 1);
-				}
 			}
 		}
 		for (let i = this.tunas.length - 1; i >=0 ; i--) {
@@ -311,7 +328,6 @@ export default class Game {
 		for (const enemy of this.enemies) enemy.update(this);
 		for (const tuna of this.tunas) tuna.update(this);
 		
-		this.createThingRandom();
 	}
 
 	private updateInit(t : DOMHighResTimeStamp) {
@@ -328,10 +344,12 @@ export default class Game {
 		}
 		if (this.guide.valid) this.guide.update(t);
 		this._update_things(t);
+		this.createThingRandom();
 	}
 
 	private updateGameover(t : DOMHighResTimeStamp) {
-
+		this.you.update(this);
+		this._update_things(t);
 	}
 
 	update : (t : DOMHighResTimeStamp) => void;
@@ -383,12 +401,14 @@ export default class Game {
 
 	render(context: CanvasRenderingContext2D) {
 		if (this.guide.valid) this.guide.render(context);
-		for (const enemies of this.enemies) enemies.render(context);
-		for (const tuna of this.tunas) tuna.render(context);
-		
-		this.you.render(context);
 
-		this.you.renderSight(context);
+		this.you.renderSprite(context);
+		for (const enemies of this.enemies) enemies.renderHitbox(context);
+		for (const tuna of this.tunas) tuna.renderHitbox(context);
+		
+		this.you.renderHitbox(context);
+
+		this.you.renderLight(context);
 
 		this.you.renderYourUI(context, this.viewboxReplica.x, this.viewboxReplica.y, followDistance * 2);
 		this.renderTunaDirection(context);

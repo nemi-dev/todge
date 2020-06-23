@@ -9,16 +9,17 @@ const yourSize = 5;
 const yourLife = 1800;
 const yourHealth = 60;
 const sight = 120;
+const yourImage = new Image();
+yourImage.src = "/temp.png";
 
 
 const backgroundColor = [41 / 255, 43 / 255, 44 / 255];
 const lightColorSource0 = [149 / 255, 232 / 255, 1];
 const lightColorSource1 = [16 / 255, 90 / 255, 136 / 255];
-const lightMinRange = 50;
+const lightMinRange = 25;
 const lightMaxRange = 150;
-const lightDistance = 45;
 
-for(let i = 0; i < 3; i++) {
+for (let i = 0; i < 3; i++) {
 	lightColorSource0[i] = Math.floor(lightColorSource0[i] * backgroundColor[i]);
 	lightColorSource1[i] = Math.floor(lightColorSource1[i] * backgroundColor[i]);
 }
@@ -43,8 +44,6 @@ export default class You extends Thing {
 
 	health : number;
 	maxHealth : number;
-
-	angle : number = 0;
 
 	private friction = friction.bind(this)
 
@@ -74,7 +73,6 @@ export default class You extends Thing {
 	setDestination(x : number, y : number) {
 		this.destX = x;
 		this.destY = y;
-		this.angle = Math.atan2(y - this.y, x - this.x);
 		this.updatePosition = this.moveToTarget;
 	}
 
@@ -94,15 +92,13 @@ export default class You extends Thing {
 		return this.life > 0 && this.health > 0;
 	}
 
-	render(context : CanvasRenderingContext2D) {
-		super.render(context);
-		this.renderSquare(context);
+	renderSprite(context : CanvasRenderingContext2D) {
+		context.drawImage(yourImage, this.x - 18, this.y - 27, 36, 54);
 	}
 
-	renderSight(context : CanvasRenderingContext2D) {
-		const { x, y, sight, angle } = this;
-		
-		let grad = context.createRadialGradient(x, y, lightMinRange, x + Math.cos(angle) * lightDistance, y + Math.sin(angle) * lightDistance , lightMaxRange);
+	renderLight(context : CanvasRenderingContext2D) {
+		const { x, y, sight } = this;
+		let grad = context.createRadialGradient(x, y, lightMinRange, x, y, lightMaxRange);
 		grad.addColorStop(0.0, sightColorStop0);
 		grad.addColorStop(0.5, sightColorStop1);
 		grad.addColorStop(1.0, sightColorStop2);
@@ -117,7 +113,7 @@ export default class You extends Thing {
 		let ratio = Math.max(0, life / maxLife);
 		let endAngle = startAngle + Math.PI * ratio / 3;
 		context.lineWidth = 5;
-		context.strokeStyle = "#ffd24a80";
+		context.strokeStyle = "hsla(45, 100%, 75%, 0.25)";
 		context.beginPath();
 		context.ellipse(x, y, distance, distance, 0, startAngle, endAngle);
 		context.stroke();
@@ -130,18 +126,18 @@ export default class You extends Thing {
 		let ratio = Math.max(0, health / maxHealth);
 		let endAngle = startAngle - Math.PI * ratio / 3;
 		context.lineWidth = 5;
-		context.strokeStyle = "hsla(200, 100%, 70%, 0.5)";
+		context.strokeStyle = "hsla(200, 100%, 70%, 0.25)";
 		context.beginPath();
 		context.ellipse(x, y, distance, distance, 0, startAngle, endAngle, true);
 		context.stroke();
 	}
 
-	renderSquare(context : CanvasRenderingContext2D) {
-		let {x, y} = this;
-		context.strokeStyle = "#FFFFFF";
-		context.lineWidth = 1;
-		context.strokeRect(x - 18, y - 27, 36, 54);
-	}
+	// renderSquare(context : CanvasRenderingContext2D) {
+	// 	let {x, y} = this;
+	// 	context.strokeStyle = "#FFFFFF";
+	// 	context.lineWidth = 1;
+	// 	context.strokeRect(x - 18, y - 27, 36, 54);
+	// }
 
 	renderYourUI(context : CanvasRenderingContext2D, x : number, y : number, distance : number) {
 		this.renderLife(context, x, y, distance);
