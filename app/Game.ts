@@ -1,6 +1,6 @@
 import Matrix2D from './Matrix2D';
 import { CoordinateState } from './Input';
-import Thing from './Thing';
+import { Enemy, Tuna, hit } from './Thing';
 import You from './You';
 import { Viewbox } from './View';
 import { moveToTarget, friction } from './Moving';
@@ -13,16 +13,37 @@ const varSpawnCount = 10;
 
 const maxTunaDelay = 900;
 
-const enemySpeed = 1.2;
-const enemySize = 5;
-const tunaSize = 4;
+const enemy = {
+	speed : 1.2,
+	size : 5,
+	life : 600,
+	color : "#FF0000",
+	diverge : Math.PI / 2,
+	damage : 2
+};
+
+const bigEnemy = {
+	speed : 0.8,
+	size : 10,
+	life : 1200,
+	color : "#FF00FF",
+	diverge : Math.PI / 3,
+	damage : 4
+};
+
+const fastEnemy = {
+	speed : 2.4,
+	size : 5,
+	life : 400,
+	color : "#FF8000",
+	diverge : Math.PI / 6,
+	damage : 1
+}
 
 const followDistance = 30;
 
 const timerWidth = 56;
 const timerHeight = 12;
-
-const damage = 20;
 
 const viewboxReplicaOriginal = { x : 0, y : 0, velX : 0, velY : 0, destX : 0, destY : 0 };
 
@@ -99,10 +120,10 @@ export default class Game {
 	you : You
 
 	/** 적들을 담은 배열 */
-	enemies : Thing[];
+	enemies : Enemy[];
 
 	/** 참치캔을 담은 배열 */
-	tunas : Thing[];
+	tunas : Tuna[];
 
 	/** 가이드 텍스트 */
 	readonly guide : GuideTextGroup = new GuideTextGroup();
@@ -228,14 +249,17 @@ export default class Game {
 		if (Math.random() < chance) {
 			const count = Math.floor(Math.random()*varSpawnCount) + minSpawnCount;
 			for (let i = 0 ; i < count; i++) {
+				let profile : typeof enemy;
+				const roll = Math.random();
+				if (roll < 0.05) profile = fastEnemy;
+				else if (roll < 0.075) profile = bigEnemy;
+				else profile = enemy;
+
 				let angle = Math.random() * Math.PI * 2;
-				let diverge = (Math.random() - 0.5)* Math.PI / 2;
 				let distance = sight * 1.5;
 				let x = yourX + Math.cos(angle) * distance;
 				let y = yourY + Math.sin(angle) * distance;
-				const thing = new Thing("enemy", x, y, enemySize, "#FF0000", 600);
-				thing.velX = - enemySpeed * Math.cos(angle + diverge);
-				thing.velY = - enemySpeed * Math.sin(angle + diverge);
+				const thing = new Enemy("enemy", x, y, angle, profile);
 
 				this.enemies.push(thing);
 				this.enemySpawnCounter = 0;
@@ -250,9 +274,8 @@ export default class Game {
 			let distance = sight * (0.5 + Math.random());
 			let x = yourX + Math.cos(angle) * distance;
 			let y = yourY + Math.sin(angle) * distance;
-			const thing = new Thing("tuna", x, y, tunaSize, "#FFBF00", 1800);
-			
-			this.tunas.push(thing);
+			// const thing = new Thing("tuna", x, y, tunaSize, "#FFBF00", 1800);
+			this.tunas.push(new Tuna(x, y));
 			this.tunaSpawnCounter = 0;
 			
 		} else {
@@ -356,16 +379,16 @@ export default class Game {
 	hitTest() {
 		const you = this.you;
 		for (const enemy of this.enemies) {
-			if (Thing.hit(you, enemy)) {
-				you.health -= damage;
-				enemy.life = 0;
+			if (hit(you, enemy)) {
+				you.health -= enemy.profile.damage;
+				enemy.dispose();
 			}
 		}
 		for (const tuna of this.tunas) {
-			if (Thing.hit(you, tuna)) {
+			if (hit(you, tuna)) {
 				you.health = you.maxHealth;
 				you.life = you.maxLife;
-				tuna.life = 0;
+				tuna.dispose();
 			}
 		}
 	}
@@ -379,7 +402,7 @@ export default class Game {
 	}
 
 	renderTunaDirection(context : CanvasRenderingContext2D) {
-		context.fillStyle = "#FFB30040";
+		context.fillStyle = "hsla(45, 100%, 50%, 0.25)";
 		const farDist = followDistance * 2;
 		const nearDist = farDist - 8;
 		const theta = Math.PI / 15;
