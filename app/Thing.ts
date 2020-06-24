@@ -28,7 +28,7 @@ export default class Thing {
 		this.life--;
 	}
 
-	render(context : CanvasRenderingContext2D) {
+	renderHitbox(context : CanvasRenderingContext2D) {
 		let { x, y, r, color } = this;
 		context.strokeStyle = color;
 		context.lineWidth = 1;

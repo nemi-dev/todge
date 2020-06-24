@@ -13,6 +13,7 @@ gameCanvas.addEventListener('contextmenu', ev => {
 
 const view = new View(gameCanvas);
 view.setViewSize(360);
+view.context.imageSmoothingEnabled = false;
 
 const game = new Game(view.viewbox);
 
