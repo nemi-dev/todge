@@ -1,4 +1,4 @@
-declare interface CoordinateState {
+declare interface PointState {
 	readonly x : number
 	readonly y : number
 	readonly beforeX : number
@@ -10,7 +10,7 @@ declare interface CoordinateState {
 	pulse() : void
 }
 
-declare interface CoordMessage {
+declare interface PointMessage {
 	type : "mousedown" | "mouseup" | "touchstart" | "touchend"
 
 	id : number
@@ -24,10 +24,10 @@ declare interface CoordMessage {
 	endTime? : DOMHighResTimeStamp
 }
 
-declare interface Listener {
-	push(m : CoordMessage) : void
-	dispatchAll() : void
-	dispatchDrag(m : CoordinateState) : void
+declare interface PointInputListener {
+	onPointStart(m : PointMessage) : void
+	onPointMove(m : PointState) : void
+	onPointEnd(m : PointMessage) : void
 }
 
 declare interface Physical {

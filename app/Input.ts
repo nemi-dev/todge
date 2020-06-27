@@ -1,27 +1,13 @@
 /*
- 리스너를 여러 개로 만들려면 다음 중 하나는 해야 한다.
- 
- - 리스너가 독자적인 큐를 갖도록 하기  
- 중앙 집중적 큐를 사용하는 이유는 메시지 우선(메시지 1을 리스너 1에게 디스패치, 메시지 1을 리스너 2에게 디스패치, ...)으로 업데이트하기 위함이다.
- 리스너 중심으로 메시지를 직접 처리하는 것보다 상태 전이가 더 용이할 수 있기 때문 (아닐 수도 있고. 이건 정말로 use-cases에 따라 다르다.)
- 그러나 이렇게 하면서도 acceptCoordinate까지 쓰려면 어떤 리스너들에 대해서는 메시지를 스킵해야 한다. 어떤 입력에 대해서 리스너가 받아들일수도, 안받아들일수도 있기 때문. 그러려면 또다시 받아들일 것인지 말것인지 여부를 판단해야 하는데 그냥 독자적 큐를 쓰는게 낫지.
- 
- acceptCoordinate를 썼던 이유는 
- 1. 미들웨어가 클릭한 채로 드래그를 중요시하는 경우에 마우스를 클릭하지 않고 움직이는 것으로 인해 발생하는 이벤트를 무시하기 위하여 리스너를 동적으로 연결/연결 해제하기 위함이다.  
- 2. 모델의 요구사항이다. 이거는 모델 선에서 처리해야지 씹놈아  
- 
- 터치 인터페이스인 경우에는 그 특성상 리스너를 굳이 연결 해제할 필요가 없다.
- 
- 그래서 acceptCoordinate를 모델 책임으로 넘겼고, 리스너가 독자적 큐를 갖도록 했다! 원한다면 리스너를 여러 개로 만들 수 있다
- 
- ### 참고
- push와 dispatch가 별개인 이유는 순전히 이것이 rAF 중심적으로 설계되었고, 모든 상태 변경은 rAF에서만 허용한다고 가정하기 때문이다. dispatch는 rAF 중에만, push는 이벤트가 발생할 수 있는 어떠한 타이밍에서든지 일어날 수 있다. 아직까지는 rAF에서 메시지 dispatch를 먼저 실행하고 실질적 모델 업데이트를 하기 때문에 그게 그거같아 보이지만, 모델 업데이트를 먼저 하도록 바꾸는 것도 가능하다. 그럼 coord도 마저 바꿔야되는데 어 시발 이게 뭐지?
+	@update 2020-06-25
+	하나의 이니셰이티브에서 리스너는 게임(Game 객체)하나로 국한된다. 따라서 리스너는 오직 하나다. 이니셰이티브 종속적인 컴포넌트로 까지 떨어뜨릴 수도 있지만.... 그렇겐 하지말자 ㅎㅎ
 */
+
 /**
  * 전적으로 rAF-Sync를 위해 표현되는 위치 객체로, 현재 rAF에서의 위치와 직전 rAF에서의 위치를 나타낸다.  
  * 직전 "이벤트"의 위치가 아닌 직전 "rAF"인 것에 주의할 것!
  * */
-export class CoordinateState {
+export class PointState {
 
 
 	/** 임시적으로 캡쳐한 입력 X좌표 */
@@ -70,7 +56,8 @@ export class CoordinateState {
 		this.inputY = y;
 	}
 
-	/** (눌림을 위해) current값을 강제로 이것으로 한다. */
+	/** current 값을 강제로 주어진 값으로 한다.
+	 * 이렇게 하면 마우스 눌림/터치 시작 때 pulse가 실행되면 입력된 값들이 before 값으로 떨어지게 된다. */
 	shim(x : number, y : number) {
 		this.currentX = x;
 		this.currentY = y;
@@ -118,19 +105,44 @@ export class Detector {
 
 }
 
+class PointMessageQueue {
+
+	private readonly messageQueue : PointMessage[] = [];
+
+	protected listener : PointInputListener
+
+	push(m : PointMessage) {
+		this.messageQueue.unshift(m);
+	}
+
+	dispatchAll() {
+		let m : PointMessage
+		while ((m = this.messageQueue.pop()) != null) {
+			switch (m.type) {
+				case "mousedown":
+				case "touchstart":
+					this.listener.onPointStart(m);
+					break;
+				case "mouseup":
+				case "touchend":
+					this.listener.onPointEnd(m);
+					break;
+			}
+		}
+	}
+}
+
 /**
  * 마우스 입력을 받아들여서 리스너에게 전달하는 클래스  
  * 이 클래스는 requestAnimationFrame()을 사용한 업데이트 패턴에 특화된 구조를 가지고 있다.  
  * 중요하고 양이 비교적 적은 이벤트(마우스 누름, 마우스 놓음)는 매 이벤트 루프마다 놓치지 않고 캡쳐해 두고, 압도적으로 많이 발생하고 중요하지 않은 이벤트(마우스 움직임)는 변화에 따라 "현재 상태"와 "직전 상태"만을 저장해 두고 rAF에서 그 상태를 참조하도록 하고 있다.  
  * 이 입력 객체는 특히 "마우스를 누를 때"에만 실제 좌표를 전달한다.
+ * 그리고 사실 이벤트 큐 처리와 rAF는 (거의) 같은 사이클에 일어난다. 스로틀링 같은 걸 일으키는 똥컴이 아니라면 말이지...
  */
-export class MouseInput {
+export class MouseInput extends PointMessageQueue {
 
 	/** 이벤트를 발생시키는 HTML 엘리먼트 */
 	private source : HTMLElement
-
-	/** 입력을 받아들이는 어떤 모델 */
-	private listener : Listener
 
 	/** (rAF?) 지금 누르고 있는 버튼 */
 	private buttons = 0;
@@ -140,45 +152,52 @@ export class MouseInput {
 	 * messagePool[n]은 n번 마우스 버튼 누름에 대응하는 임시 마우스 떼기 메시지이다.
 	 * n번 마우스 버튼 떼기가 발생하면 messagePool[n]에 있는 메시지를 꺼내서 end 값을 입력하고 큐에 넣는다.
 	 * */
-	private readonly messageCache : CoordMessage[] = [];
+	private readonly messageCache : PointMessage[] = [];
 
 	/** rAF 발생 당시 마우스 누름 중일 때 사용할 수 있는 좌표 컴포넌트 */
-	public readonly coordinate = new CoordinateState();
+	public readonly point = new PointState();
 
-	/** 마우스 누름 이벤트 발생 시 실행된다.  */
-	public readonly onstart = (ev : MouseEvent) => {
+	/**
+	 * 마우스 누름 이벤트 발생 시 실행된다.
+	 * 화살표 함수로 만들어놓지 않으면 TypeScript 버그 때문인지, 놓친 게 있는지는 모르겠지만 this 바인딩이 제대로 되지 않는다는 문제가 있다.
+	 * */
+	private readonly onstart = (ev : MouseEvent) => {
 		ev.preventDefault();
 
 		this.buttons = ev.buttons;
-		let startX = ev.offsetX;
-		let startY = ev.offsetY;
-		let id = ev.button;
-		let startTime = ev.timeStamp;
+		let {
+			offsetX : startX,
+			offsetY : startY,
+			button : id,
+			timeStamp : startTime
+		} = ev;
 
-		// pulse를 맞으면 currentX는 beforeX가 된다.
-		// 따라서 rAF가 발생하는 시점에서 이전 위치는 마우스 누름 위치로 간주된다.
-		this.coordinate.shim(startX, startY);
+		/* 
+		이전 위치와 현재 위치를 마우스 누름 위치로 한다. 이 두 줄은 다음과 같은 상황이 있을 때를 대비하고 있다.
 
-		// 이것과 rAF 사이에 move가 발생하지 않으면 rAF 발생 시 혀재 위치 또한 마우스 누름 위치가 된다.
-		// rAF 발생 전에 move가 먼저 발생하면 input값을 덮어써서 걔들이 current값이 되겠지?
-		this.coordinate.input(startX, startY);
+		1. 클릭/터치 시작과 rAF 사이에 움직임이 있을 수 있다.
+		2. 클릭/터치 시작과 끝 사이에 움직임이 없다.
+		*/
+		this.point.shim(startX, startY);
+		this.point.input(startX, startY);
 
-		this.listener.push({ type : "mousedown", id, startX, startY, startTime });
+		/* 메시지 큐에 클릭/터치 시작 메시지를 추가한다. 이것은 그야말로 rAF와 이벤트 간의 불협화음이 있을거라 생각하고 만들었기 때문에 수정이 필요해 보인다. */
+		this.push({ type : "mousedown", id, startX, startY, startTime });
 		
-		// down-up pair를 위해 마우스 누름 위치를 저장한다.
+		/** 나중에 클릭/터치가 끝이 났을 때 짝(해당하는 마우스 버튼/ 터치 ID)이 맞는 메시지를 디스패치하기 위해 클릭/터치 끝 메시지를 미리 만들어 놓는다. */
 		this.messageCache[id] = { type : "mouseup", id, startX, startY, startTime };
 
 		return false;
 	}
 
 	/** 마우스 누름 여부와 상관없이 마우스를 움직일 때 실행된다. */
-	public readonly onmove = (ev : MouseEvent) => {
-		this.coordinate.input(ev.offsetX, ev.offsetY);
+	private readonly onmove = (ev : MouseEvent) => {
+		this.point.input(ev.offsetX, ev.offsetY);
 	}
 
-	public readonly onend = (ev : MouseEvent) => {
+	private readonly onend = (ev : MouseEvent) => {
 		this.buttons = ev.buttons;
-		/* MouseEvent.offsetX는 source 상대 위치이다. 띠용! */
+		/* mouseup 이벤트는 버블 가능하므로 리스너가 도큐먼트에 연결되어 있어도 eventTarget이 source이면 offset값은 여전히 source에 상대적인 위치가 된다. */
 		let x = ev.offsetX;
 		let y = ev.offsetY;
 
@@ -186,24 +205,16 @@ export class MouseInput {
 		let message = this.messageCache[ev.button];
 		delete this.messageCache[ev.button];
 		if (message) {
-			// 임시 메시지에 실제 마우스 놓기 데이터를 입력하여 메시지를 완성시킨다.
 			message.endX = x;
 			message.endY = y;
 			message.endTime = ev.timeStamp;
-
-			// 메시지를 큐에 입력한다.
-			this.listener.push(message);
-			
-			// 현재 rAF의 마우스 위치를 떼기 위치로 간주한다.
-			// input에다 좌표를 넣어두면 rAF 발생 시 current로 내려가겠지?
-			this.coordinate.input(x, y);
+			this.push(message);			
+			this.point.input(x, y);
 		}
-
-
 	}
 
 	/** 입력 컴포넌트를 뷰에 연결한다. */
-	connect (source : HTMLElement, listener : Listener) {
+	connect (source : HTMLElement, listener : PointInputListener) {
 		this.disconnect();
 		this.source = source;
 		this.listener = listener;
@@ -227,44 +238,47 @@ export class MouseInput {
 	/**
 	 * (rAF) 큐에 있는 메시지를 모두 정리하고, 상태를 전이시킨다.
 	 * 
-	 * # 중요 : 메시지 큐, 메시지 버퍼에 쌓인 것들은 rAF와 독립적으로 발생한 것들이다. 따라서 메시지는 coordState와는 좆도 상관없다.
+	 * # 중요 : 메시지 큐, 메시지 버퍼에 쌓인 것들은 rAF와 독립적으로 발생한 것들이다. 따라서 메시지는 pointState와는 좆도 상관없다.
 	 * */
 	update() {
-		this.listener.dispatchAll();
-		this.coordinate.pulse();
-		if (this.buttons) this.listener.dispatchDrag(this.coordinate);
+		this.dispatchAll();
+		this.point.pulse();
+		if (this.buttons) this.listener.onPointMove(this.point);
 	}
 
 }
 
-
-
-
-
-export class TouchInput {
+/**
+ * 터치 입력을 받아들여 메시지를 처리하고 리스너에게 전달하는 컴포넌트
+ * 
+ * 이 객체는 터치 움직임에 따라 이전 위치를 저장하여 터치의 움직임을 추적할 수 있으며, requestAnimationFrame()을 사용한 업데이트 패턴에 특화된 구조를 가지고 있다.
+ * 
+ * MouseInput 객체와 거의 같으나 아주 미세한 곳에서 차이가 있다.
+ * 
+ * 1. 터치 입력을 받아들인다. 물론 붙이는 리스너도 touchstart, touchend로 결정된다.
+ * 2. 터치 이벤트의 구조가 다르다. 터치는 여러 개가 있을 수 있고, 마우스와 달리 모두 다른 곳에 위치해 있을 수 있다. 
+ */
+export class TouchInput extends PointMessageQueue {
 	private source : HTMLElement
 
 	/** Touch 객체는 offsetX를 가지고 있지 않다. 결국 pageX를 써야 한다는 것인데, 입력을 받아들이는 엘리먼트의 왼쪽 위를 기준으로 하려면 추가적으로 엘리먼트의 좌표를 알고 있어야 한다. 또한, 이 값들은 입력 객체 연결 시에만 초기화되기 때문에 연결 후에 엘리먼트의 위치가 바뀌지 않는다는 가정도 포함되어 있다. 엘리먼트의 위치가 바뀌어도 입력 위치가 적절히 조율되도록 하려면 이 속성들을 빼고 거의 모든 이벤트 핸들러에서 getBoundingClientRect()를 사용하애 한다. 아니면 위치가 바뀌는걸 눈치껏 알아채는 방법을 쓰든가... */
 	private sourceLeft : number
 	private sourceTop : number
 
-	private listener : Listener
-
-	private readonly messageCache : CoordMessage[] = []
+	private readonly messageCache : PointMessage[] = []
 
 	/**
 	 * 마우스는 항상 하나의 좌표지만 터치는 언제 어디서 어떤 터치가 생길지, 없어질지 모른다.
 	 * 근데 메인 터치는 있어야 하는 법이고, 갑자기 메인 터치가 없어지면 여기 있던 놈들 중에서 한 녀석이 메인 터치를 계승한다.
 	 * */
-	private readonly touchStateMap : CoordinateState[] = []
+	private readonly touchStateMap : PointState[] = []
 
 	/** @private 메인 터치의 위치 */
-	private coord : CoordinateState = null;
+	private _point : PointState = null;
 
 	/** @readonly 메인 터치의 위치 */
-	get coordinate() { return this.coord };
+	get point() { return this._point };
 
-	scale : number = 1
 	
 	public readonly onstart = (ev : TouchEvent) => {
 		// 이게 없을 때 캔버스를 스와이프하면 페이지가 스크롤되고 탭을 하면 일부 환경에서 mouseup,mousedown을 일으킨다.
@@ -275,19 +289,19 @@ export class TouchInput {
 		let touchList = ev.changedTouches;
 
 		for (const touch of touchList) {
-			let startX = (touch.pageX - this.sourceLeft) * this.scale;
-			let startY = (touch.pageY - this.sourceTop) * this.scale;
+			let startX = (touch.pageX - this.sourceLeft);
+			let startY = (touch.pageY - this.sourceTop);
 			let id = touch.identifier;
 
-			let state = new CoordinateState();
+			let state = new PointState();
 			state.input(startX, startY);
 			state.shim(startX, startY);
 			this.touchStateMap[id] = state;
 
 			// 메인 터치가 없었다면 이 터치를 메인 터치로 설정한다.
-			if (!this.coord) this.coord = state;
+			if (!this.point) this._point = state;
 
-			this.listener.push({ type : "touchstart", id, startX, startY, startTime });
+			this.push({ type : "touchstart", id, startX, startY, startTime });
 			this.messageCache[id] = { type : "touchend", id, startX, startY, startTime };
 
 		}
@@ -299,8 +313,8 @@ export class TouchInput {
 		for (const touch of ev.changedTouches) {
 			if (touch.identifier in this.touchStateMap)	{
 				const state = this.touchStateMap[touch.identifier];
-				let x = (touch.pageX - this.sourceLeft) * this.scale;
-				let y = (touch.pageY - this.sourceTop) * this.scale;
+				let x = (touch.pageX - this.sourceLeft);
+				let y = (touch.pageY - this.sourceTop);
 				state.input(x, y);
 			}
 		}
@@ -315,26 +329,26 @@ export class TouchInput {
 
 					const state = this.touchStateMap[touch.identifier];
 
-					const x = (touch.pageX - this.sourceLeft) * this.scale;
-					const y = (touch.pageY - this.sourceTop) * this.scale;
+					const x = (touch.pageX - this.sourceLeft);
+					const y = (touch.pageY - this.sourceTop);
 
 
 					message.endX = x;
 					message.endY = y;
 					message.endTime = ev.timeStamp;
 
-					this.listener.push(message);
+					this.push(message);
 
 					state.input(x, y);
 
 					// 놓은 위치의 터치 위치 상태를 뺀다.
 					delete this.touchStateMap[touch.identifier];
 					// 메이저 터치가 빠졌으면 후계자를 찾는다.
-					if (this.coord == state) {
-						this.coord = null;
+					if (this.point == state) {
+						this._point = null;
 						for (const i in this.touchStateMap) {
 							if (this.touchStateMap.hasOwnProperty(i)) {
-								this.coord = this.touchStateMap[i];
+								this._point = this.touchStateMap[i];
 								break;
 							}
 						}
@@ -345,11 +359,10 @@ export class TouchInput {
 		}
 	}
 
-	connect(source : HTMLElement, listener : Listener, scale = 1) {
+	connect(source : HTMLElement, listener : PointInputListener) {
 		this.disconnect();
 		this.source = source;
 		this.listener = listener;
-		this.scale = 1;
 		this.source.addEventListener('touchstart', this.onstart);
 		this.source.addEventListener('touchmove', this.onmove);
 		document.addEventListener('touchend', this.onend);
@@ -370,12 +383,9 @@ export class TouchInput {
 	}
 
 	update() {
-		this.listener.dispatchAll();
-		for (const i in this.touchStateMap) {
-			if (this.touchStateMap.hasOwnProperty(i)) {
-				const state = this.touchStateMap[i];
-				state.pulse();
-			}
-		}
+		this.dispatchAll();
+		for (const i in this.touchStateMap) this.touchStateMap[i].pulse();
+		if (this._point) this.listener.onPointMove(this._point);
+		
 	}
 }

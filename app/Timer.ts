@@ -26,39 +26,16 @@ function formatMs(ms : number) {
 
 }
 
+const timerWidth = 56;
+const w_3 = timerWidth / 3;
+const w_6 = timerWidth / 6;
+const timerFontSize = 12;
+
 /**
  * 타이머 컴포넌트
  * DOMHighResTimestamp 때문에 로직이 은근 복잡하다.
  * */
 export default class Timer {
-
-	/** 폰트 픽셀크기 */
-	fontSize : number
-
-	/** (margin을 제외한) 폭 */
-	private _width : number
-
-	/** 폭의 3분의 1 */
-	private w_3 : number
-
-	/** 폭의 6분의 1 */
-	private w_6 : number
-
-	get width () {
-		return this._width;
-	}
-	set width (v : number) {
-		this._width = v;
-		this.w_3 = v / 3;
-		this.w_6 = v / 6;
-	}
-
-	constructor(width : number, size : number) {
-		// this.y = height / 2;
-		this.width = width;
-		this.fontSize = size;
-	}
-	
 
 	/** 시작 버튼을 누른 시각 */
 	startTime : DOMHighResTimeStamp = null;
@@ -90,14 +67,9 @@ export default class Timer {
 
 	render (context : CanvasRenderingContext2D, x : number, y : number) {
 		
-		// let { y, left, w_3, w_6 } = this;
-		let { w_3, w_6 } = this;
-		let left = x - this.width / 2;
+		let left = x - timerWidth / 2;
 		
-		context.font = this.fontSize + 'px "Exo 2"';
-		context.textBaseline = "middle";
-		context.fillStyle = "hsla(200, 100%, 70%, 0.25)";
-		context.textAlign = 'center';
+		context.font = timerFontSize + 'px "Exo 2"';
 		
 		let [min, sec, cs] = formatMs(this.currentTime - this.startTime);
 

@@ -1,11 +1,11 @@
 import { Thing } from "./Thing";
+import { Moving } from "./Moving";
 import Game from "./Game";
-import { friction, moveToTarget } from "./Moving";
 
 const yourColor = "#FFFF00";
 const yourMaxSpeed = 0.9;
 const yourAcc = 0.5;
-const closeDistance = 20;
+const closeDistance = 10;
 const yourSize = 5;
 const yourLife = 1800;
 const yourHealth = 6;
@@ -30,17 +30,9 @@ const sightColorStop2 = "#000000FF";
 
 export default class You implements Thing {
 
-	public readonly speed = yourMaxSpeed;
-	public readonly acc = yourAcc;
-	public readonly closeDistance = closeDistance;
 	public readonly sight = sight;
 
-	x : number
-	y : number
-	velX : number
-	velY : number
-	destX : number
-	destY : number
+	readonly moving : Moving = new Moving(yourMaxSpeed, yourAcc, closeDistance);
 
 	life : number
 	maxLife : number
@@ -48,12 +40,12 @@ export default class You implements Thing {
 	health : number;
 	maxHealth : number;
 
-	private friction : () => void = friction.bind(this)
+	get valid() { return this.life > 0 && this.health > 0; }
 
-	private moveToTarget : () => void = moveToTarget.bind(this, yourMaxSpeed, yourAcc, closeDistance)
-
-	private updatePosition = this.friction
-
+	get x() { return this.moving.x; }
+	get y() { return this.moving.y; }
+	get size() { return yourSize; }
+	
 	constructor() {
 		this.init();
 	}
@@ -64,36 +56,18 @@ export default class You implements Thing {
 		this.maxLife = yourLife;
 		this.health = yourHealth;
 		this.maxHealth = yourHealth;
-		this.x = 0;
-		this.y = 0;
-		this.velX = 0;
-		this.velY = 0;
-		this.destX = null;
-		this.destY = null;
-	}
-
-	setDestination(x : number, y : number) {
-		this.destX = x;
-		this.destY = y;
-		this.updatePosition = this.moveToTarget;
-	}
-
-	neutralizeDestination() {
-		this.destX = null;
-		this.destY = null;
-		this.updatePosition = this.friction;
+		this.moving.init();
 	}
 
 	update(game : Game) {
-		this.x += this.velX;
-		this.y += this.velY;
-		this.life--;
-		this.updatePosition();
+		this.moving.update();
 	}
 
-	get valid() { return this.life > 0 && this.health > 0; }
+	drain() {
+		this.life--;
+	}
 
-	get size() { return yourSize; }
+	
 
 	dispose() {
 		this.life = 0;
@@ -118,7 +92,7 @@ export default class You implements Thing {
 		grad.addColorStop(0.5, sightColorStop1);
 		grad.addColorStop(1.0, sightColorStop2);
 		context.fillStyle = grad;
-		context.fillRect(x - sight * 2, y - sight * 2, sight * 4, sight * 4);
+		context.fillRect(x - 500, y - 500, 1000, 1000);
 	}
 
 	renderLife(context : CanvasRenderingContext2D, x : number, y : number, distance : number) {

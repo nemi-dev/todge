@@ -44,3 +44,15 @@ main {
 	max-width: calc(100vw - 2em);
 	margin: auto;
 }
+
+.overlaible-frame {
+	position: relative;
+}
+
+.overlaible-frame > * {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+}

@@ -25,8 +25,7 @@ export function hit(a : Thing, b : Thing) {
 		let { x : ax, y : ay, size : ar } = a;
 		let { x : bx, y : by, size : br } = b;
 		const dist = ar + br;
-		return 1
-		&& Math.abs(ax - bx) < dist
+		return Math.abs(ax - bx) < dist
 		&& Math.abs(ay - by) < dist
 		&& Math.hypot(ax - bx, ay - by) < ar + br;
 }

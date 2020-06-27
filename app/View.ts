@@ -8,11 +8,13 @@ export class Viewbox {
 	/** 주인 뷰가 보는 컨텍스트와 같음 */
 	private readonly context : CanvasRenderingContext2D
 
+	/**
+	 * 주인 뷰와 자신 뷰박스에 의해서 유도되는 행렬
+	 * DOMMatrix와 같으나, getTransform()은 항상 다른 인스턴스를 내놓고, currentTransform은 표준에서 권장하지 않는다. */
 	public readonly matrix : Matrix2D
 	/**
-	 * 원래라면 Canvas의 크기와 DOMMatrix의 값으로 유도되는 가상의 속성들이나, 값을 쓰는 것보다 읽는 것이 더 많을 거이라 판단하여 속성을 따로 저장해둔다.
+	 * 원래라면 Canvas의 크기와 DOMMatrix의 값으로 유도되는 가상의 속성들이나, 값을 쓰는 것보다 읽는 것이 더 많을 것이라 판단하여 속성을 따로 저장해둔다.
 	 */
-	
 	private _left : number
 	private _top : number
 	private _width : number
@@ -21,8 +23,6 @@ export class Viewbox {
 	constructor(view : View, context : CanvasRenderingContext2D, rWidth : number, rHeight : number) {
 		this.view = view;
 		this.context = context;
-
-		// View 클래스는 캔버스 여러분이 가지고 있던 기존의 변환 행렬을 존중합니다!!
 		let { a, d, e, f } = this.context.getTransform();
 		this.matrix = new Matrix2D(a, d, e, f);
 		this._width = rWidth / a;
@@ -91,10 +91,6 @@ export class Viewbox {
 		this.context.setTransform(a, 0, 0, d, e, f);
 	}
 
-	/** 뷰박스가 보고 있는 곳을 청소한다. */
-	clearRect() {
-		this.context.clearRect(this._left - 5, this._top - 5, this._width + 10, this._height + 10);
-	}
 }
 
 
@@ -108,15 +104,11 @@ export class View {
 
 	readonly viewbox : Viewbox
 
-	/**
-	 * 뷰에 입력된 실제 길이  
-	 * HTML canvas의 width, height는 반드시 정수로 저장되기 때문에 정확도를 잃을 수 있다.
-	 * */
-	private rWidth : number
-	private rHeight : number
+	private realWidth : number
+	private realHeight : number
 
-	get width() { return this.rWidth; }
-	get height() { return this.rHeight; }
+	get width() { return this.realWidth; }
+	get height() { return this.realHeight; }
 
 	/**
 	 * 캔버스를 기반으로 뷰를 생성한다.  
@@ -125,12 +117,12 @@ export class View {
 	constructor(canvas : HTMLCanvasElement) {
 
 		this.canvas = canvas;
-		this.context = canvas.getContext('2d');
+		this.context = canvas.getContext('2d', {alpha : false});
 
-		this.rWidth = this.canvas.width;
-		this.rHeight = this.canvas.height;
+		this.realWidth = this.canvas.width;
+		this.realHeight = this.canvas.height;
 
-		this.viewbox = new Viewbox(this, this.context, this.rWidth, this.rHeight);
+		this.viewbox = new Viewbox(this, this.context, this.realWidth, this.realHeight);
 
 	}
 
@@ -140,15 +132,21 @@ export class View {
 	 * height가 없으면 현재 뷰(캔버스)의 width 변화에 비례한 값이 자동 설정된다.
 	 * */
 	setViewSize(width : number, height? : number) {
-		if (height == null) height = width * this.rHeight / this.rWidth;
+		if (height == null) height = width * this.realHeight / this.realWidth;
 
-		this.rWidth = width;
-		this.rHeight = height;
+		this.realWidth = width;
+		this.realHeight = height;
 
 		this.canvas.width = width;
 		this.canvas.height = height;
 
 		this.viewbox.setSize();
+	}
+
+	/** 뷰가 지금 보고 있는 곳(뷰박스)을 청소한다. */
+	clearRect() {
+		const { left, top, width, height } = this.viewbox;
+		this.context.clearRect(left - 5, top - 5, width + 10, height + 10);
 	}
 
 }

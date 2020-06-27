@@ -3,7 +3,7 @@ const path = require('path');
 /** @type {import('webpack').Configuration[]} */
 module.exports = [
 	{
-		entry : './src/index.html',
+		entry : ['./src/index.html', './src/style.css'],
 		output : {
 			filename : './undefined.js',
 			path : path.resolve(__dirname)
@@ -11,7 +11,7 @@ module.exports = [
 		module : {
 			rules : [
 				{
-					test : /\.html$/,
+					test : /\.html$|\.css$/,
 					use : [
 						"ignore-loader",
 						"extract-loader",
