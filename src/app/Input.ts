@@ -119,12 +119,10 @@ class PointMessageQueue {
 		let m : PointMessage
 		while ((m = this.messageQueue.pop()) != null) {
 			switch (m.type) {
-				case "mousedown":
-				case "touchstart":
+				case "pointstart":
 					this.listener.onPointStart(m);
 					break;
-				case "mouseup":
-				case "touchend":
+				case "pointend":
 					this.listener.onPointEnd(m);
 					break;
 			}
@@ -182,10 +180,10 @@ export class MouseInput extends PointMessageQueue {
 		this.point.input(startX, startY);
 
 		/* 메시지 큐에 클릭/터치 시작 메시지를 추가한다. 이것은 그야말로 rAF와 이벤트 간의 불협화음이 있을거라 생각하고 만들었기 때문에 수정이 필요해 보인다. */
-		this.push({ type : "mousedown", id, startX, startY, startTime });
+		this.push({ type : "pointstart", id, startX, startY, startTime });
 		
 		/** 나중에 클릭/터치가 끝이 났을 때 짝(해당하는 마우스 버튼/ 터치 ID)이 맞는 메시지를 디스패치하기 위해 클릭/터치 끝 메시지를 미리 만들어 놓는다. */
-		this.messageCache[id] = { type : "mouseup", id, startX, startY, startTime };
+		this.messageCache[id] = { type : "pointend", id, startX, startY, startTime };
 
 		return false;
 	}
@@ -238,7 +236,7 @@ export class MouseInput extends PointMessageQueue {
 	/**
 	 * (rAF) 큐에 있는 메시지를 모두 정리하고, 상태를 전이시킨다.
 	 * 
-	 * # 중요 : 메시지 큐, 메시지 버퍼에 쌓인 것들은 rAF와 독립적으로 발생한 것들이다. 따라서 메시지는 pointState와는 좆도 상관없다.
+	 * **중요 : 메시지 큐, 메시지 버퍼에 쌓인 것들은 rAF와 독립적으로 발생한 것들이다. 따라서 메시지는 pointState와는 좆도 상관없다.**
 	 * */
 	update() {
 		this.dispatchAll();
@@ -281,8 +279,6 @@ export class TouchInput extends PointMessageQueue {
 
 	
 	public readonly onstart = (ev : TouchEvent) => {
-		// 이게 없을 때 캔버스를 스와이프하면 페이지가 스크롤되고 탭을 하면 일부 환경에서 mouseup,mousedown을 일으킨다.
-		// 타겟이 도큐먼트가 아니라면 스크롤되어선 안되겠지?
 		ev.preventDefault();
 
 		const startTime = ev.timeStamp;
@@ -301,8 +297,8 @@ export class TouchInput extends PointMessageQueue {
 			// 메인 터치가 없었다면 이 터치를 메인 터치로 설정한다.
 			if (!this.point) this._point = state;
 
-			this.push({ type : "touchstart", id, startX, startY, startTime });
-			this.messageCache[id] = { type : "touchend", id, startX, startY, startTime };
+			this.push({ type : "pointstart", id, startX, startY, startTime });
+			this.messageCache[id] = { type : "pointend", id, startX, startY, startTime };
 
 		}
 

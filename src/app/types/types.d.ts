@@ -11,7 +11,7 @@ declare interface PointState {
 }
 
 declare interface PointMessage {
-	type : "mousedown" | "mouseup" | "touchstart" | "touchend"
+	type : "pointstart" | "pointend"
 
 	id : number
 
