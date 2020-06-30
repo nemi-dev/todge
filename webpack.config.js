@@ -1,38 +1,23 @@
 const path = require('path');
+const name = 'todge';
+
+const fileLoader = {
+	loader : "file-loader",
+	options : {
+		name : "[name].[ext]",
+		outputPath : "dist/",
+		publicPath : "/",
+		esModule : false
+	}
+};
 
 /** @type {import('webpack').Configuration[]} */
 module.exports = [
 	{
-		entry : ['./src/index.html', './src/style.css'],
-		output : {
-			filename : './undefined.js',
-			path : path.resolve(__dirname)
-		},
-		module : {
-			rules : [
-				{
-					test : /\.html$|\.css$/,
-					use : [
-						"ignore-loader",
-						"extract-loader",
-						{
-							loader : "file-loader",
-							options : {
-								name : "[name].[ext]",
-								outputPath : "dist/",
-								esModule : false
-							}
-						}
-					]
-				}
-			]
-		}
-	},
-
-	{
 		entry : './app/index.ts',
+		context : path.resolve(__dirname, 'src'),
 		output : {
-			filename : 'app.js',
+			filename : `todge.js`,
 			path : path.resolve(__dirname, 'dist')
 		},
 		module : {
@@ -48,5 +33,52 @@ module.exports = [
 			extensions : [ '.ts', '.js' ]
 		},
 		mode : 'development'
+	},
+	{
+		entry : './index.html',
+		context : path.resolve(__dirname, 'src'),
+		output : {
+			filename : './undefined.bundle.js',
+			path : path.resolve(__dirname)
+		},
+		module : {
+			rules : [
+				{
+					test : /\.html$/,
+					use : [
+						"ignore-loader",
+						fileLoader,
+						"extract-loader",
+						{
+							loader : "html-loader",
+							options : {
+								minimize : true,
+								attributes : {
+									list : [
+										{
+											tag : 'img',
+											attribute : 'src',
+											type : 'src'
+										},
+										{
+											tag : 'link',
+											attribute : 'href',
+											type : 'src'
+										}
+									]
+								},
+							}
+						}
+					]
+				},
+				{
+					test : /\.css$/,
+					use : [
+						fileLoader,
+						"extract-loader"
+					]
+				}
+			]
+		}
 	}
 ];
