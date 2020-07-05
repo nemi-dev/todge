@@ -1,5 +1,4 @@
 const path = require('path');
-const name = 'todge';
 
 const fileLoader = {
 	loader : "file-loader",
@@ -32,7 +31,7 @@ module.exports = [
 		resolve : {
 			extensions : [ '.ts', '.js' ]
 		},
-		mode : 'development'
+		mode : 'production'
 	},
 	{
 		entry : './index.html',
@@ -75,7 +74,8 @@ module.exports = [
 					test : /\.css$/,
 					use : [
 						fileLoader,
-						"extract-loader"
+						"extract-loader",
+						"css-loader"
 					]
 				}
 			]
