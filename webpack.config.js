@@ -1,84 +1,89 @@
 const path = require('path');
+const HtmlWebpackPlugin = require('html-webpack-plugin');
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
-const fileLoader = {
-	loader : "file-loader",
-	options : {
-		name : "[name].[ext]",
-		outputPath : "dist/",
-		publicPath : "/",
-		esModule : false
-	}
-};
+const mode = process.env.NODE_ENV || "development";
+const devtool = process.env.NODE_ENV !== "production" ? "eval-source-map" : false;
 
-/** @type {import('webpack').Configuration[]} */
-module.exports = [
-	{
-		entry : './app/index.ts',
-		context : path.resolve(__dirname, 'src'),
-		output : {
-			filename : `todge.js`,
-			path : path.resolve(__dirname, 'dist')
-		},
-		module : {
-			rules : [
-				{
-					test : /\.ts$/,
-					use : 'ts-loader',
-					exclude : /node_modules/
-				}
-			]
-		},
-		resolve : {
-			extensions : [ '.ts', '.js' ]
-		},
-		mode : 'production'
-	},
-	{
-		entry : './index.html',
-		context : path.resolve(__dirname, 'src'),
-		output : {
-			filename : './undefined.bundle.js',
-			path : path.resolve(__dirname)
-		},
-		module : {
-			rules : [
-				{
-					test : /\.html$/,
-					use : [
-						"ignore-loader",
-						fileLoader,
-						"extract-loader",
-						{
-							loader : "html-loader",
-							options : {
-								minimize : true,
-								attributes : {
-									list : [
-										{
-											tag : 'img',
-											attribute : 'src',
-											type : 'src'
-										},
-										{
-											tag : 'link',
-											attribute : 'href',
-											type : 'src'
-										}
-									]
-								},
-							}
-						}
-					]
-				},
-				{
-					test : /\.css$/,
-					use : [
-						fileLoader,
-						"extract-loader",
-						"css-loader"
-					]
-				}
-			]
+/** @type {import('webpack-dev-server').Configuration} */
+const devServer = {
+	compress : true,
+	port : 8000,
+	static : [
+		{
+			directory : path.resolve(__dirname, "public")
 		}
-	}
-];
+	]
+}
+
+
+
+/** @type {import('webpack').Configuration} */
+const configurations = {
+	entry : ['./src/app/index.ts', './src/todge.css'],
+	output : {
+		filename : 'todge.js',
+		clean : true
+	},
+	module : {
+		rules : [
+			{
+				test : /\.ts$/,
+				use : 'ts-loader',
+				exclude : /node_modules/
+			},
+			{
+				test : /\.css$/i,
+				use : [
+					{
+						loader : MiniCssExtractPlugin.loader,
+						options : {
+							esModule : false,
+						}
+					},
+					{
+						loader :'css-loader',
+						options : {
+							esModule : false,
+							sourceMap : process.env.NODE_ENV !== 'production'
+						}
+					},
+				]
+			},
+			{
+				test : /\.md$/i,
+				type : "asset/source",
+				use : [
+					"markdown-loader"
+				]
+			}
+		]
+	},
+	resolve : {
+		extensions : [ '.ts', '.js' ]
+	},
+	mode,
+	devtool,
+	devServer,
+	plugins : [
+		new HtmlWebpackPlugin({
+			template : require.resolve(__dirname, "src", "todge.ejs"),
+			filename : "todge.html",
+			minify : {
+				collapseWhitespace: true,
+				collapseInlineTagWhitespace : true,
+				removeComments: true,
+				removeRedundantAttributes: true,
+				removeScriptTypeAttributes: true,
+				removeStyleLinkTypeAttributes: true,
+				useShortDoctype: true
+			}
+		}),
+		new MiniCssExtractPlugin({
+			filename : "todge.css"
+		})
+	]
+}
+
+module.exports = configurations;
+
