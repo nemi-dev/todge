@@ -1,7 +1,8 @@
-/*
+/** 
 	@update 2020-06-25
 	하나의 이니셰이티브에서 리스너는 게임(Game 객체)하나로 국한된다. 따라서 리스너는 오직 하나다. 이니셰이티브 종속적인 컴포넌트로 까지 떨어뜨릴 수도 있지만.... 그렇겐 하지말자 ㅎㅎ
 */
+
 
 /**
  * 전적으로 rAF-Sync를 위해 표현되는 위치 객체로, 현재 rAF에서의 위치와 직전 rAF에서의 위치를 나타낸다.  
@@ -73,37 +74,6 @@ export class PointState {
 	}
 }
 
-/** 입력 인터페이스를 눈치껏 알아채는 객체 */
-export class Detector {
-
-	private detected = false;
-	private disconnect() {
-		document.removeEventListener('mousedown', this.mouse);
-		document.removeEventListener('touchstart', this.touch);
-		this.detected = true;
-	}
-
-	private mouse : (ev : MouseEvent) => void
-	private touch : (ev : TouchEvent) => void
-
-	public whenItsMouse : (ev : MouseEvent) => void
-	public whenItsTouch : (ev : TouchEvent) => void
-
-	open() {
-		if (this.detected) return; 
-		this.mouse = ev => {
-			this.whenItsMouse(ev);
-			this.disconnect();
-		};
-		this.touch = ev => {
-			this.whenItsTouch(ev);
-			this.disconnect();
-		}
-		document.addEventListener('mousedown', this.mouse);
-		document.addEventListener('touchstart', this.touch);
-	}
-
-}
 
 class PointMessageQueue {
 

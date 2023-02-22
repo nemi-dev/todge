@@ -1,8 +1,17 @@
 {
+	"include": ["src/**/*.ts", "./src/**/*.tsx"],
+	"exclude": [
+    "node_modules"
+  ],
 	"compilerOptions": {
-		"target": "ES6",
 		"allowJs": true,
-		"allowSyntheticDefaultImports": true
+		"target": "ES2020",
+		"skipLibCheck": true,
+		"moduleResolution": "Node",
+		"allowSyntheticDefaultImports": true,
+		"sourceMap": true,
+		"jsx": "react",
+		"resolveJsonModule": true
 	},
 	"typingOptions" : {
 		"enableAutoDiscovery" : true

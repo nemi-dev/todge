@@ -1,7 +1,8 @@
 import { View } from './View';
-import { MouseInput } from './Input';
+import { MouseInput, TouchInput } from './Input';
 import Game from './Game';
 import RAFPulseClock from './RAFPulseClock';
+import { isTouchDevice } from './touchscreen';
 
 const gameElement = document.getElementById('game-frame');
 gameElement.addEventListener('contextmenu', ev => {
@@ -22,9 +23,14 @@ const uiView = new View(uiCanvas);
 
 const game = new Game(gameView.viewbox);
 
-const input = new MouseInput();
-input.connect(gameElement, game);
-
+let input : MouseInput | TouchInput;
+if (isTouchDevice()) {
+	input = new TouchInput();
+	input.connect(gameElement, game);
+} else {
+	input = new MouseInput();
+	input.connect(gameElement, game);
+}
 
 function fitSize() {
 	let w : number, h : number;

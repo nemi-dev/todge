@@ -67,7 +67,7 @@ const configurations = {
 	devServer,
 	plugins : [
 		new HtmlWebpackPlugin({
-			template : require.resolve(__dirname, "src", "todge.ejs"),
+			template : require.resolve("./src/todge.ejs"),
 			filename : "todge.html",
 			minify : {
 				collapseWhitespace: true,

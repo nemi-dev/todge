@@ -12,9 +12,8 @@ export class Viewbox {
 	 * 주인 뷰와 자신 뷰박스에 의해서 유도되는 행렬
 	 * DOMMatrix와 같으나, getTransform()은 항상 다른 인스턴스를 내놓고, currentTransform은 표준에서 권장하지 않는다. */
 	public readonly matrix : Matrix2D
-	/**
-	 * 원래라면 Canvas의 크기와 DOMMatrix의 값으로 유도되는 가상의 속성들이나, 값을 쓰는 것보다 읽는 것이 더 많을 것이라 판단하여 속성을 따로 저장해둔다.
-	 */
+
+	/** 원래라면 Canvas의 크기와 DOMMatrix의 값으로 유도되는 가상의 속성들이나, 값을 쓰는 것보다 읽는 것이 더 많을 것이라 판단하여 속성을 따로 저장해둔다. */
 	private _left : number
 	private _top : number
 	private _width : number
